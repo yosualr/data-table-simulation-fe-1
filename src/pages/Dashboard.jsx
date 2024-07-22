@@ -1,12 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { Button } from '@mui/material';
+import { Box, Typography } from '@mui/material';
 import DataTable from '../components/DataTable';
 
 export default function Dashboard() {
   const [data, setData] = useState([]);
   const [originalData, setOriginalData] = useState([]);
   const [deletedRows, setDeletedRows] = useState([]);
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveMessage, setSaveMessage] = useState('');
 
   useEffect(() => {
     axios.get('http://localhost:8080/api/customers/list').then(response => {
@@ -15,38 +17,45 @@ export default function Dashboard() {
     });
   }, []);
 
-  const handleSave = () => {
-    const changes = data.filter((row, index) => JSON.stringify(row) !== JSON.stringify(originalData[index]));
-    if (changes.length > 0 || deletedRows.length > 0) {
-      axios.post('http://localhost:8080/api/customers/batch', {
-        updateRequests: changes.map(({ customerId, customerName, customerCity }) => ({
-          customerId,
-          customerName,
-          customerCity,
-        })),
-        deleteRequests: deletedRows,
-      }).then(() => {
-        setOriginalData(data);
-        setDeletedRows([]);
-        alert('Data saved successfully!');
-        window.location.reload();
+  const handleSave = (changes, deletedRows) => {
+    setIsSaving(true);
+    setSaveMessage('Saving changes...');
+    axios.post('http://localhost:8080/api/customers/batch', {
+      updateRequests: changes.map(({ customerId, customerName, customerCity }) => ({
+        customerId,
+        customerName,
+        customerCity,
+      })),
+      deleteRequests: deletedRows,
+    }).then(response => {
+      axios.get('http://localhost:8080/api/customers/list').then(response => {
+        setData(response.data);
+        setOriginalData(response.data);
       });
-    } else {
-      alert('No changes to save.');
-    }
+      setIsSaving(false);
+      setSaveMessage('Changes saved successfully!');
+      setTimeout(() => {
+        setSaveMessage('');
+      }, 2000);
+    });
   };
 
   const handleDelete = (id) => {
     setDeletedRows(prev => [...prev, id]);
     setData(data.filter(row => row.customerId !== id));
   };
+
   return (
     <div>
-      <h1>Customers Table</h1>
-      <Button variant="contained" color="success" onClick={handleSave} sx={{marginBottom:'2vh'}}>
-        Save Data
-      </Button>
-      <DataTable data={data} setData={setData} handleDelete={handleDelete} />
+      <Box display="flex" alignItems="center" justifyContent="space-between">
+        <Typography variant="h4" sx={{ margin: "15px" }}>Customers Table</Typography>
+        {saveMessage && (
+          <Typography variant="body2" color={isSaving ? "textSecondary" : "primary"} sx={{ marginRight: '2vw' }}>
+            {saveMessage}
+          </Typography>
+        )}
+      </Box>
+      <DataTable data={data} setData={setData} handleDelete={handleDelete} handleSave={handleSave} />
     </div>
   );
 }
